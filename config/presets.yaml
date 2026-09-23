@@ -1,4 +1,0 @@
-# 複数構文をまとめて生成するときのプリセット（--structure にプリセット名を渡す）
-7構文: [arrow_list, hidden_reveal, symptom_prescription, list_reply, ng_ok, three_tier, honne_series]
-5構文: [bara_tsunagari, list_reply, arrow_list, ng_ok, honne_series]
-all: [list_reply, ng_ok, honne_series, arrow_list, hidden_reveal, symptom_prescription, three_tier, abc3, bara_tsunagari]
