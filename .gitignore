@@ -1,0 +1,8 @@
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+output/*
+!output/.gitkeep
+service_account*.json
+.env
