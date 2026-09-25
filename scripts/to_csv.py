@@ -65,8 +65,8 @@ def to_rows(data: dict, limit: int | None = None) -> tuple[list[list], list[str]
     for post in data["posts"]:
         s = post["structure"]
         counters[s] = counters.get(s, 0) + 1  # No は構文ごとに1から
-        for part in post["parts"]:
-            note = ""
+        for i, part in enumerate(post["parts"]):
+            note = post.get("note", "") if i == 0 else ""  # 投稿ごとのメモ（年収の出典など）は先頭行に
             if limit and (n := weighted_length(part["text"])) > limit:
                 note = f"文字数超過 {n}/{limit}"
                 warnings.append(f"[{s}] No.{counters[s]} {post['theme']} {part['kind']}: {note}")
