@@ -51,10 +51,24 @@ def test_cli_writes_csv(tmp_path):
     src = tmp_path / "posts.json"
     src.write_text(json.dumps(sample(), ensure_ascii=False), encoding="utf-8")
     out = subprocess.run(
-        [sys.executable, str(ROOT / "scripts/to_csv.py"), str(src), "--out-dir", str(tmp_path)],
+        [sys.executable, str(ROOT / "scripts/to_csv.py"), str(src), "--out-dir", str(tmp_path),
+         "--history", str(tmp_path / "themes.tsv")],
         capture_output=True, text=True, check=True,
     ).stdout.splitlines()
     assert out[0] == "X投稿_tamura_2026-09-23_NG連打→OK提示型"
     with open(out[1], encoding="utf-8-sig", newline="") as f:
         rows = list(csv.reader(f))
     assert rows[0] == COLUMNS and rows[1][3] == "本文1\n改行あり" and len(rows) == 5
+
+
+def test_history_and_duplicate_check(tmp_path):
+    src = tmp_path / "posts.json"
+    src.write_text(json.dumps(sample(), ensure_ascii=False), encoding="utf-8")
+    hist = tmp_path / "themes.tsv"
+    cmd = [sys.executable, str(ROOT / "scripts/to_csv.py"), str(src), "--out-dir", str(tmp_path), "--history", str(hist)]
+    first = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert "過去と同じテーマ" not in first.stderr
+    assert len(hist.read_text(encoding="utf-8").splitlines()) == 3  # 見出し＋2テーマ
+    check = subprocess.run(cmd + ["--check-only"], capture_output=True, text=True)
+    assert check.returncode == 1 and "過去と同じテーマ" in check.stderr
+    assert len(hist.read_text(encoding="utf-8").splitlines()) == 3  # --check-only は追記しない

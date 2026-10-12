@@ -18,6 +18,10 @@
 出力: <out-dir>/X投稿_{account}_{date}_{label}.csv（BOM付きUTF-8）
 標準出力の1行目にシート名、2行目にCSVのパスを出す。--limit を付けると、
 Xの文字数（全角=2）で上限を超えたパーツを note 列と標準エラーに出す。
+
+出力したテーマは --history（既定: history/themes.tsv）に追記する。同じ構文で
+過去に出したテーマと重なるものがあれば、標準エラーに警告を出す。
+テーマの確認だけしたいときは --check-only（CSVも履歴も書かない）。
 """
 
 from __future__ import annotations
@@ -29,6 +33,9 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
+
+DEFAULT_HISTORY = Path(__file__).resolve().parent.parent / "history" / "themes.tsv"
+HISTORY_COLUMNS = ["date", "account", "structure", "theme"]
 
 COLUMNS = [
     "No", "テーマ", "種別", "テキスト", "date", "account", "structure", "status",
@@ -77,15 +84,53 @@ def to_rows(data: dict, limit: int | None = None) -> tuple[list[list], list[str]
     return rows, warnings
 
 
+def read_history(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as f:
+        return list(csv.DictReader(f, delimiter="\t"))
+
+
+def duplicate_themes(data: dict, history: list[dict]) -> list[str]:
+    """同じ構文で過去に出したテーマ（アカウントを問わない）と重なるものを返す。"""
+    past = {}
+    for h in history:
+        past.setdefault((h["structure"], h["theme"]), h)
+    dups = []
+    for p in data["posts"]:
+        h = past.get((p["structure"], p["theme"]))
+        if h:
+            dups.append(f"[{p['structure']}] {p['theme']}（{h['date']} {h['account']} で出力済み）")
+    return dups
+
+
+def append_history(path: Path, data: dict) -> None:
+    new = not path.exists()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f, delimiter="\t", lineterminator="\n")
+        if new:
+            writer.writerow(HISTORY_COLUMNS)
+        for p in data["posts"]:
+            writer.writerow([data["date"], data["account"], p["structure"], p["theme"]])
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("json_path")
     ap.add_argument("--out-dir", default="output")
     ap.add_argument("--limit", type=int, help="1パーツあたりの文字数上限（Xのカウント。無料アカウントは280）")
+    ap.add_argument("--history", type=Path, default=DEFAULT_HISTORY, help="出力済みテーマの履歴（TSV）")
+    ap.add_argument("--check-only", action="store_true", help="テーマの重複だけ確認する（CSVも履歴も書かない）")
     args = ap.parse_args(argv)
 
     data = json.loads(Path(args.json_path).read_text(encoding="utf-8"))
     data.setdefault("date", date.today().isoformat())
+    dups = duplicate_themes(data, read_history(args.history))
+    for d in dups:
+        print(f"⚠ 過去と同じテーマ: {d}", file=sys.stderr)
+    if args.check_only:
+        return 1 if dups else 0
     rows, warnings = to_rows(data, args.limit)
     title = sheet_title(data)
     path = Path(args.out_dir) / f"{title}.csv"
@@ -94,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
         writer = csv.writer(f)
         writer.writerow(COLUMNS)
         writer.writerows(rows)
+    append_history(args.history, data)
     print(title)
     print(path)
     for w in warnings:
